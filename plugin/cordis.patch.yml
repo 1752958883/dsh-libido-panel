@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-libido-hud
+      name: '@local/dsh-libido-hud'

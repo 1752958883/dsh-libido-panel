@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>状态面板</title>
+  <style>
+    :root {
+      --background: #081424;
+      --panel: #102139;
+      --line: #2a3e58;
+      --text: #f1f6ff;
+      --muted: #aabbd0;
+      --accent: #84ddeb;
+      --error: #ffc5ad;
+      font-family: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--background); color: var(--text); }
+    main { width: min(100% - 48px, 960px); margin: 0 auto; padding: 32px 0 24px; }
+    header, .panel-heading, footer { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    header { margin-bottom: 20px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 22px; font-weight: 650; }
+    h2 { font-size: 15px; font-weight: 600; }
+    .small { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .local { white-space: nowrap; }
+    .local::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--accent); }
+    .summary, .detail { display: grid; gap: 16px; }
+    .summary { grid-template-columns: 1.55fr 1fr; margin-bottom: 16px; }
+    .detail { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+    .panel { min-width: 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+    .eyebrow { color: var(--muted); font-size: 13px; font-weight: 500; }
+    .reading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; margin-top: 4px; }
+    .number, .season-value, .delta, .event-time { font-variant-numeric: tabular-nums; }
+    .number { color: var(--accent); font-size: clamp(48px, 8vw, 72px); font-weight: 650; line-height: 1.12; letter-spacing: -.045em; }
+    .tier { font-size: 20px; font-weight: 650; }
+    .tier::before { content: "·"; margin-right: 12px; color: var(--muted); }
+    .activity { color: var(--accent); font-size: 12px; }
+    .check-in {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      column-gap: 12px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .check-in-summary, .check-in-note { overflow-wrap: anywhere; }
+    .check-in-summary { font-size: 13px; }
+    .check-in-summary.empty { color: var(--muted); }
+    .check-in-note { grid-column: 2 / -1; margin-top: 4px; white-space: pre-wrap; }
+    button, select, textarea { font: inherit; }
+    button {
+      min-height: 34px;
+      padding: 5px 12px;
+      color: var(--text);
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--muted); }
+    button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .check-in button { color: var(--accent); font-size: 12px; }
+    dialog {
+      width: min(400px, 100% - 32px);
+      padding: 24px;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    dialog::backdrop { background: rgb(4 10 18 / 78%); }
+    dialog h2 { font-size: 18px; }
+    .check-in-form { display: grid; gap: 14px; margin-top: 16px; }
+    .field { display: grid; gap: 6px; font-size: 13px; }
+    .field select, .field textarea {
+      width: 100%;
+      padding: 9px 10px;
+      color: var(--text);
+      background: var(--background);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .field textarea { min-height: 64px; resize: vertical; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .save { color: var(--background); background: var(--accent); border-color: var(--accent); font-weight: 650; }
+    #check-in-error { color: var(--error); }
+    .season-value { margin-top: 12px; font-size: 24px; font-weight: 650; }
+    .season-dates { margin-top: 8px; }
+    .plot-layout { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; margin-top: 16px; }
+    .y-axis { display: flex; flex-direction: column; justify-content: space-between; text-align: right; }
+    .y-axis span { line-height: 1; }
+    .plot { display: block; width: 100%; height: 112px; overflow: visible; }
+    .gridlines { fill: none; stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    #trend { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    .x-axis { grid-column: 2; display: flex; justify-content: space-between; }
+    .plot-note { margin-top: 12px; }
+    .events { padding: 0; margin: 8px 0 0; list-style: none; }
+    .events li { display: grid; grid-template-columns: 82px 44px minmax(0, 1fr); column-gap: 8px; align-items: baseline; min-height: 33px; padding: 7px 0; font-size: 13px; }
+    .events li + li { border-top: 1px solid var(--line); }
+    .events .empty { display: block; }
+    .delta { color: var(--accent); }
+    .delta.negative { color: var(--error); }
+    .event-note { overflow-wrap: anywhere; }
+    footer { margin-top: 16px; }
+    #status.error { color: var(--error); }
+    @media (max-width: 650px) {
+      main { width: calc(100% - 32px); padding-top: 24px; }
+      h1 { font-size: 18px; }
+      .summary, .detail { grid-template-columns: 1fr; gap: 12px; }
+      .summary { margin-bottom: 12px; }
+      .panel { padding: 16px; }
+      footer { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1 id="panel-title">状态面板</h1>
+      <span class="small local">本地面板</span>
+    </header>
+
+    <div class="summary">
+      <section class="panel" aria-labelledby="reading-label">
+        <h2 class="eyebrow" id="reading-label">性欲值 / 100</h2>
+        <p class="reading"><span class="number" id="current">—</span><span class="tier" id="tier" hidden></span><span class="activity" id="activity" hidden></span></p>
+        <div class="check-in" role="group" aria-labelledby="check-in-label">
+          <h3 class="eyebrow" id="check-in-label">近况</h3>
+          <p class="check-in-summary empty" id="check-in-summary" role="status">还没填写</p>
+          <button type="button" id="edit-check-in" aria-haspopup="dialog" aria-label="编辑近况">编辑</button>
+          <p class="small check-in-note" id="check-in-note" hidden></p>
+        </div>
+      </section>
+      <section class="panel" aria-labelledby="season-label">
+        <h2 class="eyebrow" id="season-label">发情期</h2>
+        <p class="season-value" id="season">—</p>
+        <p class="small season-dates">每月 18 日至 20 日</p>
+      </section>
+    </div>
+
+    <div class="detail">
+      <section class="panel" aria-labelledby="history-label">
+        <div class="panel-heading">
+          <h2 id="history-label">最近 72 小时</h2>
+          <span class="small">按小时估算</span>
+        </div>
+        <div class="plot-layout">
+          <div class="small y-axis" aria-hidden="true"><span>100</span><span>50</span><span>0</span></div>
+          <svg class="plot" viewBox="0 0 720 112" preserveAspectRatio="none" role="img" aria-labelledby="trend-label">
+            <title id="trend-label">最近 72 小时的数值走势</title>
+            <path class="gridlines" d="M0 4H720 M0 56H720 M0 108H720"/>
+            <path id="trend"/>
+            <path id="latest-point" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke" fill="none"/>
+          </svg>
+          <div class="small x-axis" aria-hidden="true"><span>72 小时前</span><span>48 小时前</span><span>24 小时前</span><span>现在</span></div>
+        </div>
+        <p class="small plot-note" id="plot-note">缺少历史记录的时段留空。</p>
+      </section>
+
+      <section class="panel" aria-labelledby="events-label">
+        <div class="panel-heading">
+          <h2 id="events-label">最近事件</h2>
+          <span class="small">最多 5 条</span>
+        </div>
+        <ul class="events" id="events"><li class="small empty">正在读取…</li></ul>
+      </section>
+    </div>
+
+    <footer class="small">
+      <p id="status" role="status">正在连接本地服务…</p>
+      <p>UTC+08:00 · 每 30 秒刷新</p>
+    </footer>
+  </main>
+
+  <dialog id="check-in-dialog" aria-labelledby="check-in-title">
+    <h2 id="check-in-title">编辑近况</h2>
+    <form class="check-in-form" id="check-in-form">
+      <label class="field" for="mood">
+        心情
+        <select id="mood" autofocus>
+          <option value="">未选择</option>
+          <option>安静</option>
+          <option>开心</option>
+          <option>有点烦</option>
+          <option>想发呆</option>
+        </select>
+      </label>
+      <label class="field" for="company">
+        陪伴偏好
+        <select id="company">
+          <option value="">未选择</option>
+          <option>想聊聊</option>
+          <option>想有人陪着</option>
+          <option>想独处</option>
+        </select>
+      </label>
+      <label class="field" for="note">
+        一句话近况（可选）
+        <textarea id="note" rows="2" maxlength="80" placeholder="最多 80 字"></textarea>
+      </label>
+      <p class="small">保存在这个浏览器里。</p>
+      <p class="small" id="check-in-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="cancel-check-in">取消</button>
+        <button class="save" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const byId = id => document.getElementById(id);
+    const checkInKey = 'alan-panel.check-in';
+    const checkInDialog = byId('check-in-dialog');
+    const moodInput = byId('mood');
+    const companyInput = byId('company');
+    const noteInput = byId('note');
+    const checkInError = byId('check-in-error');
+
+    let savedCheckIn = null;
+
+    async function loadCheckIn() {
+      try {
+        const res = await fetch('/api/state', { cache: 'no-store' });
+        const data = await res.json();
+        savedCheckIn = (data && data.checkIn) || null;
+      } catch {
+        savedCheckIn = null;
+      }
+    }
+
+    function readCheckIn() {
+      const saved = savedCheckIn;
+      moodInput.value = (saved && saved.mood) || '';
+      companyInput.value = (saved && saved.company) || '';
+      noteInput.value = typeof (saved && saved.note) === 'string' ? saved.note.slice(0, 80) : '';
+    }
+
+    function renderCheckIn() {
+      const summary = [moodInput.value, companyInput.value].filter(Boolean).join(' · ');
+      const note = noteInput.value.trim();
+      byId('check-in-summary').textContent = summary || (note ? '未选心情或陪伴' : '还没填写');
+      byId('check-in-summary').classList.toggle('empty', !summary);
+      byId('check-in-note').textContent = note;
+      byId('check-in-note').hidden = !note;
+    }
+
+    byId('edit-check-in').addEventListener('click', async () => {
+      await loadCheckIn();
+      readCheckIn();
+      checkInError.hidden = true;
+      checkInDialog.showModal();
+    });
+    byId('cancel-check-in').addEventListener('click', () => checkInDialog.close());
+    byId('check-in-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const checkIn = { mood: moodInput.value, company: companyInput.value, note: noteInput.value.trim() };
+      try {
+        const res = await fetch('/api/mood', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: JSON.stringify(checkIn),
+        });
+        if (!res.ok) throw new Error('status ' + res.status);
+        savedCheckIn = checkIn;
+      } catch {
+        checkInError.textContent = '写不进状态文件，面板服务可能在重启。';
+        checkInError.hidden = false;
+        return;
+      }
+      renderCheckIn();
+      checkInDialog.close();
+    });
+    loadCheckIn().then(() => {
+      readCheckIn();
+      renderCheckIn();
+    });
+
+    const clock = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+    const calendar = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+
+    function renderTrend(history) {
+      const path = [];
+      let drawing = false;
+      let latest;
+      let count = 0;
+      history.forEach((point, index) => {
+        if (point.value === null) {
+          drawing = false;
+          return;
+        }
+        const x = index * 720 / (history.length - 1);
+        const y = 108 - point.value * 1.04;
+        latest = `${x.toFixed(1)} ${y.toFixed(1)}`;
+        path.push(`${drawing ? 'L' : 'M'}${latest}`);
+        drawing = true;
+        count++;
+      });
+      byId('trend').setAttribute('d', path.join(' '));
+      byId('latest-point').setAttribute('d', latest ? `M${latest}h0` : '');
+      byId('trend-label').textContent = `最近 72 小时的数值走势，可推算 ${count} 个采样点`;
+      byId('plot-note').textContent = count > 1 ? '缺少历史记录的时段留空。' : '历史记录不足，目前仅显示当前点。';
+    }
+
+    function renderEvents(events) {
+      const rows = events.map(event => {
+        const row = document.createElement('li');
+        const time = document.createElement('time');
+        const delta = document.createElement('span');
+        const note = document.createElement('span');
+        time.className = 'small event-time';
+        time.dateTime = event.at;
+        time.textContent = calendar.format(new Date(event.at));
+        delta.className = event.delta < 0 ? 'delta negative' : 'delta';
+        delta.textContent = event.delta > 0 ? `+${event.delta}` : String(event.delta);
+        note.className = 'event-note';
+        note.textContent = event.note || '—';
+        row.append(time, delta, note);
+        return row;
+      });
+      if (!rows.length) {
+        const empty = document.createElement('li');
+        empty.className = 'small empty';
+        empty.textContent = '暂无事件记录';
+        rows.push(empty);
+      }
+      byId('events').replaceChildren(...rows);
+    }
+
+    function render(state) {
+      if (state.owner) {
+        const heading = state.owner + ' · 状态面板';
+        if (document.title !== heading) document.title = heading;
+        const headingEl = byId('panel-title');
+        if (headingEl && headingEl.textContent !== heading) headingEl.textContent = heading;
+      }
+      byId('current').textContent = state.current;
+      byId('tier').textContent = state.tier;
+      byId('tier').hidden = false;
+      byId('activity').textContent = state.activeNote;
+      byId('activity').hidden = !state.activeNote;
+      byId('season').textContent = state.season.active
+        ? `发情期 · 第 ${state.season.day} 天`
+        : `还有 ${state.season.daysUntil} 天`;
+      renderTrend(state.history);
+      renderEvents(state.events);
+      byId('status').classList.remove('error');
+      byId('status').textContent = `更新于 ${clock.format(new Date(state.asOf))}`;
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch('/api/state', { cache: 'no-store' });
+        const state = await response.json();
+        if (!response.ok) throw new Error(state.error);
+        render(state);
+      } catch {
+        byId('status').classList.add('error');
+        byId('status').textContent = '暂时读不到状态，稍后自动重试。';
+      }
+    }
+
+    if (location.protocol === 'file:') {
+      byId('status').textContent = '请双击 start.bat 启动面板。';
+    } else {
+      refresh();
+      setInterval(refresh, 30_000);
+    }
+  </script>
+</body>
+</html>
