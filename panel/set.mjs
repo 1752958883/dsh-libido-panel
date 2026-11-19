@@ -7,15 +7,22 @@ const F = process.env.LIBIDO_STATE
   || join(homedir(), '.dsh', 'worlds', 'default', 'me', '发情状态.json');
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
+const localDate = (ms) => iso(ms + 8 * 3600 * 1000).slice(0, 10);
+const today = localDate(now);
+const oldestTallyDay = localDate(now - 6 * 24 * 3600 * 1000);
 
 function load() {
   const data = JSON.parse(readFileSync(F, 'utf8').replace(/^\uFEFF/, ''));
   if (!Array.isArray(data.samples)) data.samples = [];
   if (!Array.isArray(data.events)) data.events = [];
+  if (!data.tally || typeof data.tally !== 'object' || Array.isArray(data.tally)) data.tally = {};
   return data;
 }
 
 function save(data) {
+  data.tally = Object.fromEntries(Object.entries(data.tally).filter(([day]) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(day) && day >= oldestTallyDay && day <= today,
+  ));
   copyFileSync(F, F + '.bak');
   writeFileSync(F, JSON.stringify(data, null, 2) + String.fromCharCode(10), 'utf8');
 }
@@ -36,15 +43,24 @@ function show(tag) {
 
 function apply(delta, text) {
   const before = state.current;
-  const after = Math.max(0, Math.min(100, before + delta));
+  let applied = delta;
+  if (delta > 0) {
+    const n = data.tally[today] || 0;
+    const k = [1, 0.75, 0.5][n] ?? 0.25;
+    const scaled = Math.max(1, Math.round(delta * k));
+    applied = scaled;
+    data.tally[today] = n + 1;
+  }
+  const after = Math.max(0, Math.min(100, before + applied));
+  const change = after - before;
   data.value = after;
   data.updatedAt = iso(now);
-  data.events.unshift({ at: iso(now), delta: after - before, note: text || String(delta) });
+  data.events.unshift({ at: iso(now), delta: change, note: text || String(applied) });
   data.events = data.events.slice(0, 200);
   data.samples.push({ at: iso(now), value: after });
   data.samples = data.samples.slice(-300);
   save(data);
-  console.log(String(before).padStart(3) + '  ->  ' + String(after).padStart(3) + '   (' + (delta >= 0 ? '+' : '') + delta + ')' + (text ? '  ' + text : ''));
+  console.log(String(before).padStart(3) + '  ->  ' + String(after).padStart(3) + '   (' + (change >= 0 ? '+' : '') + change + ')' + (text ? '  ' + text : ''));
   show();
 }
 
