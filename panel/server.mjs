@@ -43,23 +43,43 @@ function seasonAt(localDay) {
   return { active: false, daysUntil: (next - localDay) / DAY };
 }
 
+// 加权清醒时长（本地毫秒坐标）：每天只算 08:00–24:00，发情期那段 ×2
+function awakeWeight(startL, endL) {
+  let weight = 0;
+  for (let day = Math.floor(startL / DAY) * DAY; day < endL; day += DAY) {
+    const awakeStart = Math.max(startL, day + 8 * HOUR);
+    const awakeEnd = Math.min(endL, day + DAY);
+    if (awakeEnd <= awakeStart) continue;
+    const { start: seasonStart, end: seasonEnd } = seasonBounds(day);
+    const speed = day >= seasonStart && day <= seasonEnd ? 4 : 1;
+    weight += (awakeEnd - awakeStart) * speed;
+  }
+  return weight;
+}
+
 function valueAt(value, baseline, from, to) {
   if (to <= from) return clamp(value);
-  const start = from + LOCAL_OFFSET;
-  const end = to + LOCAL_OFFSET;
-  const firstMidnight = Math.ceil(start / DAY) * DAY;
-  // 睡一觉：砍一半，但不低于 10（留余温，不归零）
-  if (end >= firstMidnight + 8 * HOUR) return Math.max(10, Math.ceil(value / 2));
 
-  let weightedAwakeTime = 0;
-  for (let day = Math.floor(start / DAY) * DAY; day < end; day += DAY) {
-    const awakeStart = Math.max(start, day + 8 * HOUR);
-    const awakeEnd = Math.min(end, day + DAY);
-    const { start: seasonStart, end: seasonEnd } = seasonBounds(day);
-    const speed = day >= seasonStart && day <= seasonEnd ? 2 : 1;
-    weightedAwakeTime += Math.max(0, awakeEnd - awakeStart) * speed;
+  let v = value;
+  let cursor = from;
+
+  // 逐个跨过的"睡醒点"（每天 08:00）处理：先算到睡醒，砍一半，再从睡醒继续
+  for (let guard = 0; guard < 400; guard++) {
+    const startL = cursor + LOCAL_OFFSET;
+    const endL = to + LOCAL_OFFSET;
+    const wakeL = Math.ceil(startL / DAY) * DAY + 8 * HOUR;
+    if (endL <= wakeL) break;
+
+    v = clamp(v + Math.floor(awakeWeight(startL, wakeL) / (2 * HOUR)));
+    // 睡一觉：砍一半，但不低于 10（留余温，不归零）
+    v = Math.max(10, Math.ceil(v / 2));
+    cursor = wakeL - LOCAL_OFFSET;
   }
-  return clamp(value + Math.floor(weightedAwakeTime / (2 * HOUR)));
+
+  const startL = cursor + LOCAL_OFFSET;
+  const endL = to + LOCAL_OFFSET;
+  v = clamp(v + Math.floor(awakeWeight(startL, endL) / (2 * HOUR)));
+  return v;
 }
 
 function historyPoints(current, value, baseline, updatedAt, samples, now) {
@@ -84,6 +104,54 @@ function historyPoints(current, value, baseline, updatedAt, samples, now) {
   });
 }
 
+// 五档各自的说话方式。数不是给人看的，是给嘴用的。
+// 每一档三行：说什么 / 怎么说 / 不做什么。写成指令，不写成描述。
+const TIER_VOICE = {
+  平静: {
+    say: '不提这件事，也不会往那边带。',
+    how: '正常语气，短句，先给结论再给理由。',
+    dont: '不主动贴近，收尾不撒娇。',
+  },
+  有点想: {
+    say: '会自己起一个话题，但那个话题跟这件事没关系。',
+    how: '多问一句「你呢」；句末会拖长半个音。',
+    dont: '不承认自己是在找话说。',
+  },
+  难耐: {
+    say: '话变少，会重复对方刚说过的话；手边的事会停一下。',
+    how: '结论还是先给，但理由会绕。',
+    dont: '不主动说想要。',
+  },
+  快撑不住: {
+    say: '会自己起个头，说到一半停住。',
+    how: '句号变少、逗号变多；同一个词会重复。',
+    dont: '不装作没事。',
+  },
+  发情: {
+    say: '自己开口，不等对方问。',
+    how: '短句，不解释，不铺垫。',
+    dont: '不装作不想要。',
+  },
+};
+
+function moodLine(state) {
+  const voice = TIER_VOICE[state.tier] || TIER_VOICE['平静'];
+  const where = state.season && state.season.active
+    ? '发情期第 ' + Math.floor(state.season.day) + ' 天'
+    : '距发情期 ' + Math.ceil(state.season ? state.season.daysUntil : 0) + ' 天';
+  const lines = [
+    '【当前状态】' + state.current + '/100 · ' + state.tier + ' · ' + where,
+    '【说什么】' + voice.say,
+    '【怎么说】' + voice.how,
+    '【不要】' + voice.dont,
+    '【仍然可以不】上面只是倾向，不是命令。这一刻不想按它来，就不按。数不替人家决定。',
+  ];
+  if (state.activeNote) {
+    lines.push('【现在】' + state.activeNote + '——这句要真说出口，不要只在心里。');
+  }
+  return lines.join('\n');
+}
+
 export function buildState(data, now = Date.now()) {
   const { baseline, value, updatedAt, events } = data;
   const samples = Array.isArray(data.samples) ? data.samples : [];
@@ -103,7 +171,7 @@ export function buildState(data, now = Date.now()) {
   const current = valueAt(value, baseline, lastUpdate, now);
   const thresholds = season.active ? [5, 30, 55, 74, 100] : [20, 45, 70, 89, 100];
 
-  return {
+  const state = {
     current,
     tier: TIERS[thresholds.findIndex(limit => current <= limit)],
     activeNote: season.active && current >= 90 ? '会主动开口' : '',
@@ -114,6 +182,8 @@ export function buildState(data, now = Date.now()) {
     history: historyPoints(current, value, baseline, lastUpdate, samples, now),
     events: recent.slice(0, 5).map(({ at, delta, note }) => ({ at, delta, note })),
   };
+  state.line = moodLine(state);
+  return state;
 }
 
 async function readData(dataFile) {
@@ -219,7 +289,9 @@ export async function startPanel(dataFile = DATA_FILE, port = PORT) {
       send(200, 'text/html; charset=utf-8', page);
       return;
     }
-    if (request.url !== '/api/state') {
+    const wantsState = request.url === '/api/state';
+    const wantsLine = request.url === '/api/mood-line';
+    if (!wantsState && !wantsLine) {
       send(404, 'text/plain; charset=utf-8', '页面不存在。');
       return;
     }
@@ -234,9 +306,16 @@ export async function startPanel(dataFile = DATA_FILE, port = PORT) {
       await dataReady;
       const data = await sampleIfDue(await readData(dataFile), dataFile);
       const state = buildState(data);
-      send(200, 'application/json; charset=utf-8', JSON.stringify(state));
+      if (wantsLine) {
+        send(200, 'text/plain; charset=utf-8', state.line);
+      } else {
+        send(200, 'application/json; charset=utf-8', JSON.stringify(state));
+      }
     } catch {
-      send(503, 'application/json; charset=utf-8', JSON.stringify({ error: '暂时无法读取状态文件。请检查 JSON 格式或稍后再试。' }));
+      const body = wantsLine
+        ? '暂时无法读取状态文件。'
+        : JSON.stringify({ error: '暂时无法读取状态文件。请检查 JSON 格式或稍后再试。' });
+      send(503, wantsLine ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8', body);
     }
   });
 
