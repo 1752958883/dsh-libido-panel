@@ -3,281 +3,402 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>状态面板</title>
-  <style>
-    :root {
-      --background: #081424;
-      --panel: #102139;
-      --line: #2a3e58;
-      --text: #f1f6ff;
-      --muted: #aabbd0;
-      --accent: #84ddeb;
-      --error: #ffc5ad;
-      font-family: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--background); color: var(--text); }
-    main { width: min(100% - 48px, 960px); margin: 0 auto; padding: 32px 0 24px; }
-    header, .panel-heading, footer { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-    header { margin-bottom: 20px; }
-    h1, h2, h3, p { margin: 0; }
-    h1 { font-size: 22px; font-weight: 650; }
-    h2 { font-size: 15px; font-weight: 600; }
-    .small { color: var(--muted); font-size: 12px; line-height: 1.55; }
-    .local { white-space: nowrap; }
-    .local::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--accent); }
-    .summary, .detail { display: grid; gap: 16px; }
-    .summary { grid-template-columns: 1.55fr 1fr; margin-bottom: 16px; }
-    .detail { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
-    .panel { min-width: 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-    .eyebrow { color: var(--muted); font-size: 13px; font-weight: 500; }
-    .reading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; margin-top: 4px; }
-    .number, .season-value, .delta, .event-time { font-variant-numeric: tabular-nums; }
-    .number { color: var(--accent); font-size: clamp(48px, 8vw, 72px); font-weight: 650; line-height: 1.12; letter-spacing: -.045em; }
-    .tier { font-size: 20px; font-weight: 650; }
-    .tier::before { content: "·"; margin-right: 12px; color: var(--muted); }
-    .activity { color: var(--accent); font-size: 12px; }
-    .check-in {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      align-items: center;
-      column-gap: 12px;
-      margin-top: 14px;
-      padding-top: 12px;
-      border-top: 1px solid var(--line);
-    }
-    .check-in-summary, .check-in-note { overflow-wrap: anywhere; }
-    .check-in-summary { font-size: 13px; }
-    .check-in-summary.empty { color: var(--muted); }
-    .check-in-note { grid-column: 2 / -1; margin-top: 4px; white-space: pre-wrap; }
-    button, select, textarea { font: inherit; }
-    button {
-      min-height: 34px;
-      padding: 5px 12px;
-      color: var(--text);
-      background: transparent;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    button:hover { border-color: var(--muted); }
-    button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .check-in button { color: var(--accent); font-size: 12px; }
-    dialog {
-      width: min(400px, 100% - 32px);
-      padding: 24px;
-      color: var(--text);
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-    }
-    dialog::backdrop { background: rgb(4 10 18 / 78%); }
-    dialog h2 { font-size: 18px; }
-    .check-in-form { display: grid; gap: 14px; margin-top: 16px; }
-    .field { display: grid; gap: 6px; font-size: 13px; }
-    .field select, .field textarea {
-      width: 100%;
-      padding: 9px 10px;
-      color: var(--text);
-      background: var(--background);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-    }
-    .field textarea { min-height: 64px; resize: vertical; }
-    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-    .save { color: var(--background); background: var(--accent); border-color: var(--accent); font-weight: 650; }
-    #check-in-error { color: var(--error); }
-    .season-value { margin-top: 12px; font-size: 24px; font-weight: 650; }
-    .season-dates { margin-top: 8px; }
-    .plot-layout { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; margin-top: 16px; }
-    .y-axis { display: flex; flex-direction: column; justify-content: space-between; text-align: right; }
-    .y-axis span { line-height: 1; }
-    .plot { display: block; width: 100%; height: 112px; overflow: visible; }
-    .gridlines { fill: none; stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
-    #trend { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-    .x-axis { grid-column: 2; display: flex; justify-content: space-between; }
-    .plot-note { margin-top: 12px; }
-    .events { padding: 0; margin: 8px 0 0; list-style: none; }
-    .events li { display: grid; grid-template-columns: 82px 44px minmax(0, 1fr); column-gap: 8px; align-items: baseline; min-height: 33px; padding: 7px 0; font-size: 13px; }
-    .events li + li { border-top: 1px solid var(--line); }
-    .events .empty { display: block; }
-    .delta { color: var(--accent); }
-    .delta.negative { color: var(--error); }
-    .event-note { overflow-wrap: anywhere; }
-    footer { margin-top: 16px; }
-    #status.error { color: var(--error); }
-    @media (max-width: 650px) {
-      main { width: calc(100% - 32px); padding-top: 24px; }
-      h1 { font-size: 18px; }
-      .summary, .detail { grid-template-columns: 1fr; gap: 12px; }
-      .summary { margin-bottom: 12px; }
-      .panel { padding: 16px; }
-      footer { flex-wrap: wrap; }
-    }
-  </style>
+  <meta name="theme-color" content="#071319">
+  <title>潮汐面板</title>
+  <style>:root {
+  color-scheme: dark;
+  --background:#071319; --panel:#0e2028; --panel-top:#122831; --line:#26414a;
+  --text:#f0f7f5; --muted:#a5bcc1; --accent:#8ce5d3; --accent-ink:#08281f;
+  --warm:#f4ce93; --error:#ffb19f; --ease:cubic-bezier(.23,1,.32,1);
+  --body:"Segoe UI Variable","Microsoft YaHei UI","Noto Sans SC",system-ui,sans-serif;
+  --mono:"Cascadia Mono","Consolas",monospace;
+  font-family:var(--body); font-size:15px; font-synthesis:none;
+}
+* { box-sizing:border-box; }
+[hidden] { display:none !important; }
+body { margin:0; min-height:100vh; color:var(--text); background:radial-gradient(ellipse at 68% -24%,#14343b 0%,transparent 62%),var(--background); }
+main { max-width:1184px; width:calc(100% - 88px); margin:auto; padding:32px 0 24px; }
+h1,h2,h3,p { margin:0; }
+button,input,select { font:inherit; }
+button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:7px 13px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:#10242c; cursor:pointer; white-space:nowrap; transition:background-color 150ms ease,border-color 150ms ease,transform 150ms var(--ease); }
+button:active:not(:disabled) { transform:scale(.97); }
+button:disabled { opacity:.47; cursor:not-allowed; }
+button:focus-visible,select:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(hover:hover) and (pointer:fine) { button:hover:not(:disabled) { border-color:#6f9997; background:#19343d; } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; } button:active:not(:disabled){transform:none} }
+.icon { width:16px; height:16px; flex:none; stroke:currentColor; fill:none; stroke-width:1.65; stroke-linecap:round; stroke-linejoin:round; }
+.mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.small { color:var(--muted); font-size:12px; line-height:1.55; }
+.eyebrow { display:block; font:600 10px/1.35 var(--mono); letter-spacing:.15em; color:var(--accent); }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:21px; border-bottom:1px solid var(--line); }
+.brand { display:flex; align-items:center; gap:12px; min-width:0; }
+.brand-mark { width:42px; height:42px; display:grid; place-items:center; color:var(--accent); background:#14342f; border:1px solid #38605a; border-radius:12px; flex:none; }
+.brand-mark svg { width:26px; height:26px; }
+.brand-copy span { color:var(--muted); }
+.brand-copy strong { display:block; font-size:17px; font-weight:720; letter-spacing:.025em; line-height:1.3; margin-top:2px; }
+.connection { display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; white-space:nowrap; }
+.connection::before { content:""; width:7px; height:7px; background:var(--warm); border-radius:50%; box-shadow:0 0 0 4px #f4ce9317; }
+.connection[data-online="true"] { color:var(--accent); }
+.connection[data-online="true"]::before { background:var(--accent); box-shadow:0 0 0 4px #8ce5d31c; }
+.page-heading { display:flex; justify-content:space-between; align-items:end; gap:12px; margin:22px 0 16px; }
+.page-heading h1 { font-size:clamp(27px,4vw,37px); font-weight:730; line-height:1.19; letter-spacing:-.045em; }
+.page-heading p { margin-top:6px; font-size:13px; color:var(--muted); }
+.edition { color:var(--muted); font:11px/1.5 var(--mono); letter-spacing:.065em; white-space:nowrap; }
+.summary,.detail { display:grid; grid-template-columns:minmax(0,1.66fr) minmax(0,1fr); gap:14px; }
+.panel { min-width:0; padding:19px 21px; background:var(--panel); border:1px solid var(--line); border-radius:16px; }
+.panel-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+.panel-heading h2 { font-size:15px; font-weight:680; }
+.section-cap { display:flex; align-items:center; gap:8px; }
+.section-cap .icon { color:var(--accent); }
+.hero { isolation:isolate; position:relative; overflow:hidden; background:linear-gradient(109deg,#123630 0%,#102a2b 49%,#0d242c 100%); border-color:#355851; }
+.hero > :not(.hero-art) { position:relative; z-index:1; }
+.hero-art { position:absolute; pointer-events:none; bottom:8px; right:-16px; width:59%; height:100%; color:#7bdac9; opacity:.33; }
+.hero-label { font-size:13px; font-weight:620; color:#c4e4de; }
+.reading { display:flex; align-items:baseline; gap:7px; margin-top:6px; }
+.number { font-size:clamp(61px,8vw,88px); font-weight:630; line-height:.96; color:#ddfff5; letter-spacing:-.085em; font-variant-numeric:tabular-nums; }
+.denominator { font:13px/1 var(--mono); color:#a6ceca; margin-left:4px; }
+.tier { font-size:12px; color:#bbf4e5; border:1px solid #59817a; background:#173d37; padding:4px 9px; border-radius:6px; margin-left:7px; }
+.activity { font-size:11px; color:var(--warm); align-self:center; }
+.gauge { width:min(100%,440px); margin-top:16px; }
+.gauge-track { position:relative; height:8px; overflow:hidden; border-radius:8px; background:#193c3c; box-shadow:0 0 0 1px #52746d80; }
+.gauge-track::after { position:absolute; inset:0; content:""; background:repeating-linear-gradient(to right,transparent 0 calc(25% - 1px),#102d30 calc(25% - 1px) 25%); }
+.gauge-fill { width:var(--level,0%); height:100%; border-radius:8px; background:linear-gradient(90deg,#539f94,#aaffde); }
+.gauge-scale { display:flex; justify-content:space-between; color:#abc3c5; font:10px/1 var(--mono); margin-top:7px; }
+.value-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:14px; }
+.value-controls button { min-height:34px; font-size:12px; padding:6px 10px; }
+.value-reset { color:var(--warm); background:#312a24; border-color:#756149; }
+.value-baseline { color:#e0c699; font:11px/1.35 var(--mono); }
+.value-status { margin-top:8px; }
+.value-status.error,.value-edit-error { color:var(--error); }
+.value-dialog { width:min(380px,calc(100% - 30px)); margin:auto; padding:20px; color:var(--text); background:var(--panel); border:1px solid #42676b; border-radius:14px; box-shadow:0 18px 60px #0008; }
+.value-dialog::backdrop { background:#030b10b8; }
+.value-dialog h2 { font-size:18px; }
+.value-dialog form { display:grid; gap:12px; margin-top:12px; }
+.value-dialog input { min-height:42px; font-size:17px; font-variant-numeric:tabular-nums; }
+.value-dialog-actions { display:flex; justify-content:flex-end; gap:8px; }
+.cycle-panel { display:flex; flex-direction:column; background:linear-gradient(155deg,var(--panel-top),var(--panel) 68%); }
+.cycle-panel .eyebrow { color:var(--warm); }
+.cycle-tag { color:var(--warm); font:10px/1 var(--mono); border:1px solid #7b674b; border-radius:999px; padding:5px 8px; letter-spacing:.055em; }
+.season-value { font-size:clamp(26px,3.5vw,36px); line-height:1.16; font-weight:720; letter-spacing:-.065em; margin:12px 0 4px; }
+.cycle-days { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:auto; padding-top:13px; }
+.cycle-day { padding:7px 6px 5px; text-align:center; background:#0b1d23; border:1px solid #304750; border-radius:9px; color:#c1ced0; }
+.cycle-day b { display:block; font:650 17px/1.1 var(--mono); }
+.cycle-day span { display:block; margin-top:4px; font-size:10px; color:var(--muted); white-space:nowrap; }
+.cycle-day[data-phase="current"] { border-color:#9d7e4f; color:#ffe3b0; background:#362d21; }
+.cycle-day[data-phase="current"] span { color:#f5d5a3; }
+.cycle-day[data-phase="passed"] { border-color:#3d685f; color:var(--accent); }
+.pending-panel { margin:14px 0; border-color:#34564f; background:linear-gradient(90deg,#102828,#10232a 66%); }
+.pending-panel select { max-width:min(55%,220px); min-height:33px; color:var(--muted); font-size:12px; padding:4px 6px; }
+.pending-panel select:disabled { appearance:none; opacity:1; color:#b3d5d1; -webkit-text-fill-color:#b3d5d1; }
+.pending-panel form { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:10px; margin-top:10px; }
+.field { display:grid; gap:5px; font-size:12px; font-weight:570; color:#d3e3e4; min-width:0; }
+select,input { width:100%; min-width:0; color:var(--text); background:#091b22; border:1px solid #38605f; border-radius:8px; padding:8px 10px; }
+.field input { font-size:14px; min-height:40px; }
+.field input::placeholder { color:#91aaad; }
+.pending-actions { display:flex; gap:8px; }
+.save { background:var(--accent); border-color:transparent; color:var(--accent-ink); font-weight:700; }
+@media(hover:hover) and (pointer:fine) { .save:hover:not(:disabled) { background:#b2f4e5; border-color:transparent; } }
+.pending-status { margin-top:8px; overflow-wrap:anywhere; }
+.pending-status.error { color:var(--error); }
+.pending-slip { margin-top:9px; display:flex; gap:12px; align-items:center; padding:8px 10px; border-left:2px solid #88c4a7; background:#1b3531; border-radius:0 8px 8px 0; }
+.pending-slip-tag { font-size:11px; color:var(--accent); white-space:nowrap; }
+.pending-slip-text { flex:1; min-width:0; font-size:13px; overflow-wrap:anywhere; white-space:pre-wrap; }
+.pending-expiry { color:var(--warm); font:11px/1.4 var(--mono); white-space:nowrap; }
+.plot-layout { display:grid; grid-template-columns:29px minmax(0,1fr); gap:8px 9px; margin-top:13px; }
+.y-axis { display:flex; flex-direction:column; align-items:end; justify-content:space-between; padding-block:0; }
+.plot { display:block; width:100%; height:130px; overflow:visible; }
+.gridlines { fill:none; stroke:#31525a; stroke-width:1; vector-effect:non-scaling-stroke; stroke-dasharray:3 4; }
+#trend { fill:none; stroke:var(--accent); stroke-width:2.15; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+.x-axis { grid-column:2; display:flex; justify-content:space-between; }
+.plot-note { margin-top:9px; }
+.events { list-style:none; padding:0; margin:8px 0 0; }
+.events li { display:grid; grid-template-columns:78px 52px minmax(0,1fr); align-items:center; gap:8px; min-height:39px; padding:7px 0; font-size:13px; }
+.events li + li { border-top:1px solid #24404a; }
+.events .empty { display:block; color:var(--muted); }
+.event-time,.delta { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.delta { justify-self:start; color:#a3e7d8; background:#193c39; border:1px solid #3a5d57; border-radius:5px; min-width:33px; text-align:center; padding:2px 5px; font-size:11px; }
+.delta.negative { color:var(--error); background:#3b2827; border-color:#6c4841; }
+.delta.zero { color:var(--muted); background:#203039; border-color:#3b5058; }
+.event-note { overflow-wrap:anywhere; }
+footer { display:flex; justify-content:space-between; gap:10px; margin-top:14px; padding:0 1px; }
+#status.error { color:var(--error); }
+@media(max-width:780px) { main{width:calc(100% - 36px);padding-top:22px}.summary,.detail{grid-template-columns:minmax(0,1fr)}.cycle-days{margin-top:4px}.cycle-panel{min-height:unset}.hero-art{width:62%} }
+@media(max-width:485px) { main{width:calc(100% - 24px)}.topbar{padding-bottom:14px}.page-heading{margin-block:17px 13px}.edition{display:none}.panel{padding:15px}.pending-panel form{grid-template-columns:minmax(0,1fr)}.pending-actions{justify-content:flex-end}.pending-slip{flex-wrap:wrap;gap:5px 9px}.pending-expiry{margin-left:auto}.pending-slip-text{flex:1 0 70%}.events li{grid-template-columns:76px 42px minmax(0,1fr);gap:6px}.section-cap{gap:5px}footer{flex-wrap:wrap} }</style>
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="icon-wave" viewBox="0 0 24 24"><path d="M2 15c3 0 3-2 5-2s3 2 5 2 3-2 5-2 3 2 5 2M2 20c3 0 3-2 5-2s3 2 5 2 3-2 5-2 3 2 5 2M12 12c-.2-3-2.9-6.2-7.9-6.7 1.8 2.2 3.5 3.4 6 4M12 12c.2-3 2.9-6.2 7.9-6.7-1.8 2.2-3.5 3.4-6 4"/></symbol>
+    <symbol id="icon-note" viewBox="0 0 24 24"><path d="M5 4h14a1 1 0 0 1 1 1v10l-5 5H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM15 20v-5h5M8 8h8m-8 4h5"/></symbol>
+    <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M3 3v17h18M6 15l4-5 4 2 6-7"/><circle cx="20" cy="5" r="1"/></symbol>
+    <symbol id="icon-events" viewBox="0 0 24 24"><path d="M7 6h14M7 12h14M7 18h14M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  </svg>
   <main>
-    <header>
-      <h1 id="panel-title">状态面板</h1>
-      <span class="small local">本地面板</span>
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-wave"/></svg></div>
+        <div class="brand-copy"><span class="eyebrow">TIDE LOG</span><strong id="owner-name">你的名字</strong></div>
+      </div>
+      <span class="connection" id="connection" role="status">正在连接</span>
     </header>
+    <div class="page-heading"><div><h1 id="panel-title">潮汐面板</h1><p>看数值和周期，记下还没说完的话。</p></div><span class="edition">本地记录 / UTC+08</span></div>
 
     <div class="summary">
-      <section class="panel" aria-labelledby="reading-label">
-        <h2 class="eyebrow" id="reading-label">性欲值 / 100</h2>
-        <p class="reading"><span class="number" id="current">—</span><span class="tier" id="tier" hidden></span><span class="activity" id="activity" hidden></span></p>
-        <div class="check-in" role="group" aria-labelledby="check-in-label">
-          <h3 class="eyebrow" id="check-in-label">近况</h3>
-          <p class="check-in-summary empty" id="check-in-summary" role="status">还没填写</p>
-          <button type="button" id="edit-check-in" aria-haspopup="dialog" aria-label="编辑近况">编辑</button>
-          <p class="small check-in-note" id="check-in-note" hidden></p>
+      <section class="panel hero" aria-labelledby="reading-label">
+        <svg class="hero-art" viewBox="0 0 480 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <linearGradient id="art-fade"><stop stop-color="white" stop-opacity="0"/><stop offset=".28" stop-color="white" stop-opacity=".62"/><stop offset=".84" stop-color="white"/><stop offset="1" stop-color="white" stop-opacity=".6"/></linearGradient>
+            <mask id="water-mask"><rect width="480" height="250" fill="url(#art-fade)"/></mask>
+            <linearGradient id="tail-shade" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#83dcd0" stop-opacity=".32"/><stop offset="1" stop-color="#83dcd0" stop-opacity=".02"/></linearGradient>
+            <pattern id="sea-paper" width="19" height="19" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".8" fill="currentColor" opacity=".31"/></pattern>
+          </defs>
+          <g mask="url(#water-mask)">
+            <rect x="40" y="0" width="440" height="250" fill="url(#sea-paper)"/>
+            <g fill="none" stroke="currentColor" stroke-width=".75" opacity=".47">
+              <circle cx="315" cy="108" r="103"/><circle cx="315" cy="108" r="83" stroke-dasharray="2 6"/><circle cx="315" cy="108" r="65"/>
+              <path d="M94 99c65-36 105-28 153-10m98 11c47-7 89-29 148-60M52 183c96-60 160-19 230-25s118-57 210-63M63 196c89-59 153-17 217-23s121-61 212-66M84 212c83-58 132-18 203-25s125-59 212-67M105 225c77-52 130-15 183-24s125-65 213-71"/>
+            </g>
+            <path d="M316 164c-4-19-10-30-28-39-21-10-39-27-49-57 25 11 51 9 70 26l6 7 8-8c22-20 43-15 71-31-8 31-28 51-49 62-17 10-25 24-29 40Z" fill="url(#tail-shade)" stroke="currentColor" stroke-width="2"/>
+            <path d="M315 102c-15 7-52-15-71-29m73 30c15 6 52-17 74-35m-103 52c13 2 22 18 27 31 5-14 12-25 25-31" fill="none" stroke="currentColor" stroke-width="1" opacity=".8"/>
+            <g fill="currentColor"><circle cx="404" cy="49" r="2.6"/><circle cx="246" cy="54" r="2"/><circle cx="421" cy="87" r="1.3"/></g>
+          </g>
+        </svg>
+        <h2 id="reading-label" class="hero-label">当前性欲值</h2>
+        <p class="reading"><span class="number" id="current">—</span><span class="denominator">/ 100</span><span class="tier" id="tier" hidden></span><span class="activity" id="activity" hidden></span></p>
+        <div class="gauge" aria-hidden="true" id="gauge"><div class="gauge-track"><div class="gauge-fill"></div></div><div class="gauge-scale"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div></div>
+        <div class="value-controls" role="group" aria-label="数值操作">
+          <button id="edit-value" type="button" aria-haspopup="dialog" disabled>调整数值</button>
+          <button id="reset-value" type="button" class="value-reset" disabled>解决一次 <span id="value-baseline" class="value-baseline" hidden></span></button>
+        </div>
+        <p id="value-status" class="small value-status" role="status" hidden></p>
+      </section>
+      <section class="panel cycle-panel" aria-labelledby="season-label">
+        <div class="panel-heading"><div><span class="eyebrow">CYCLE</span><h2 id="season-label">周期</h2></div><span class="cycle-tag" id="cycle-tag">日历</span></div>
+        <p class="season-value" id="season">—</p><p class="small" id="season-dates">每月 18 日至 20 日</p>
+        <div class="cycle-days" aria-label="当月周期">
+          <div class="cycle-day" id="cycle-1"><b>18</b><span>第 1 天</span></div>
+          <div class="cycle-day" id="cycle-2"><b>19</b><span>第 2 天</span></div>
+          <div class="cycle-day" id="cycle-3"><b>20</b><span>第 3 天</span></div>
         </div>
       </section>
-      <section class="panel" aria-labelledby="season-label">
-        <h2 class="eyebrow" id="season-label">发情期</h2>
-        <p class="season-value" id="season">—</p>
-        <p class="small season-dates">每月 18 日至 20 日</p>
-      </section>
     </div>
+
+    <section class="panel pending-panel" aria-labelledby="pending-label">
+      <div class="panel-heading">
+        <div class="section-cap"><svg class="icon" aria-hidden="true"><use href="#icon-note"/></svg><h2 id="pending-label">待开口</h2></div>
+        <select id="pending-session" aria-label="便签所属会话" disabled><option value="">未选择会话</option></select>
+      </div>
+      <div class="pending-slip" id="pending-slip" hidden><span class="pending-slip-tag">已挂</span><span id="pending-text" class="pending-slip-text"></span><time id="pending-expiry" class="pending-expiry"></time></div>
+      <form id="pending-form">
+        <label class="field" for="pending-input">还有哪半句想说？<input id="pending-input" maxlength="120" placeholder="写下一个话题，最多 120 字" autocomplete="off" disabled required></label>
+        <div class="pending-actions"><button type="button" id="pending-clear" disabled hidden>清掉</button><button type="submit" class="save" id="pending-save" disabled>挂起来</button></div>
+      </form>
+      <p class="small pending-status" id="pending-status" role="status">正在读取便签…</p>
+    </section>
 
     <div class="detail">
       <section class="panel" aria-labelledby="history-label">
-        <div class="panel-heading">
-          <h2 id="history-label">最近 72 小时</h2>
-          <span class="small">按小时估算</span>
-        </div>
+        <div class="panel-heading"><div class="section-cap"><svg class="icon" aria-hidden="true"><use href="#icon-chart"/></svg><h2 id="history-label">潮汐走势</h2></div><span class="small mono">最近 72 小时</span></div>
         <div class="plot-layout">
-          <div class="small y-axis" aria-hidden="true"><span>100</span><span>50</span><span>0</span></div>
+          <div class="small mono y-axis" aria-hidden="true"><span>100</span><span>50</span><span>0</span></div>
           <svg class="plot" viewBox="0 0 720 112" preserveAspectRatio="none" role="img" aria-labelledby="trend-label">
             <title id="trend-label">最近 72 小时的数值走势</title>
-            <path class="gridlines" d="M0 4H720 M0 56H720 M0 108H720"/>
-            <path id="trend"/>
-            <path id="latest-point" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke" fill="none"/>
+            <defs><linearGradient id="plot-fill" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#8ce5d3" stop-opacity=".3"/><stop offset="1" stop-color="#8ce5d3" stop-opacity=".035"/></linearGradient></defs>
+            <path class="gridlines" d="M0 4H720 M0 56H720 M0 108H720"/><path id="trend-area" fill="url(#plot-fill)"/><path id="trend"/>
+            <path id="latest-point" stroke="#c9ffec" stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke" fill="none"/>
           </svg>
           <div class="small x-axis" aria-hidden="true"><span>72 小时前</span><span>48 小时前</span><span>24 小时前</span><span>现在</span></div>
         </div>
-        <p class="small plot-note" id="plot-note">缺少历史记录的时段留空。</p>
+        <p class="small plot-note" id="plot-note">按小时估算，缺少记录的时段留空。</p>
       </section>
-
       <section class="panel" aria-labelledby="events-label">
-        <div class="panel-heading">
-          <h2 id="events-label">最近事件</h2>
-          <span class="small">最多 5 条</span>
-        </div>
+        <div class="panel-heading"><div class="section-cap"><svg class="icon" aria-hidden="true"><use href="#icon-events"/></svg><h2 id="events-label">最近事件</h2></div><span class="small">最多 5 条</span></div>
         <ul class="events" id="events"><li class="small empty">正在读取…</li></ul>
       </section>
     </div>
-
-    <footer class="small">
-      <p id="status" role="status">正在连接本地服务…</p>
-      <p>UTC+08:00 · 每 30 秒刷新</p>
-    </footer>
+    <footer class="small"><p id="status" role="status">正在连接本地服务…</p><p>每 30 秒刷新 · 数据保存在本机</p></footer>
   </main>
 
-  <dialog id="check-in-dialog" aria-labelledby="check-in-title">
-    <h2 id="check-in-title">编辑近况</h2>
-    <form class="check-in-form" id="check-in-form">
-      <label class="field" for="mood">
-        心情
-        <select id="mood" autofocus>
-          <option value="">未选择</option>
-          <option>安静</option>
-          <option>开心</option>
-          <option>有点烦</option>
-          <option>想发呆</option>
-        </select>
-      </label>
-      <label class="field" for="company">
-        陪伴偏好
-        <select id="company">
-          <option value="">未选择</option>
-          <option>想聊聊</option>
-          <option>想有人陪着</option>
-          <option>想独处</option>
-        </select>
-      </label>
-      <label class="field" for="note">
-        一句话近况（可选）
-        <textarea id="note" rows="2" maxlength="80" placeholder="最多 80 字"></textarea>
-      </label>
-      <p class="small">保存在这个浏览器里。</p>
-      <p class="small" id="check-in-error" role="alert" hidden></p>
-      <div class="dialog-actions">
-        <button type="button" id="cancel-check-in">取消</button>
-        <button class="save" type="submit">保存</button>
-      </div>
+  <dialog id="value-dialog" class="value-dialog" aria-labelledby="value-title">
+    <h2 id="value-title">调整数值</h2>
+    <form id="value-form">
+      <label class="field" for="value-input">性欲值（0–100）<input id="value-input" type="number" min="0" max="100" step="1" inputmode="numeric" required autofocus></label>
+      <p id="value-edit-error" class="small value-edit-error" role="alert" hidden></p>
+      <div class="value-dialog-actions"><button id="cancel-value" type="button">取消</button><button id="save-value" type="submit" class="save">保存</button></div>
     </form>
   </dialog>
 
   <script>
     const byId = id => document.getElementById(id);
-    const checkInKey = 'alan-panel.check-in';
-    const checkInDialog = byId('check-in-dialog');
-    const moodInput = byId('mood');
-    const companyInput = byId('company');
-    const noteInput = byId('note');
-    const checkInError = byId('check-in-error');
+    const preview = location.protocol === 'file:';
+    const valueDialog = byId('value-dialog');
+    const editValue = byId('edit-value');
+    const resetValue = byId('reset-value');
+    const valueInput = byId('value-input');
+    const saveValue = byId('save-value');
+    const cancelValue = byId('cancel-value');
+    const valueStatus = byId('value-status');
+    const valueEditError = byId('value-edit-error');
+    let currentValue, baselineValue;
+    let valueBusy = false, valueOnline = false, valueVersion = 0;
 
-    let savedCheckIn = null;
-
-    async function loadCheckIn() {
-      try {
-        const res = await fetch('/api/state', { cache: 'no-store' });
-        const data = await res.json();
-        savedCheckIn = (data && data.checkIn) || null;
-      } catch {
-        savedCheckIn = null;
-      }
+    function valueControls() {
+      editValue.disabled = preview || !valueOnline || valueBusy;
+      resetValue.disabled = editValue.disabled || !Number.isInteger(baselineValue);
+      saveValue.disabled = editValue.disabled;
+      cancelValue.disabled = valueBusy;
+      valueInput.disabled = valueBusy;
     }
 
-    function readCheckIn() {
-      const saved = savedCheckIn;
-      moodInput.value = (saved && saved.mood) || '';
-      companyInput.value = (saved && saved.company) || '';
-      noteInput.value = typeof (saved && saved.note) === 'string' ? saved.note.slice(0, 80) : '';
-    }
-
-    function renderCheckIn() {
-      const summary = [moodInput.value, companyInput.value].filter(Boolean).join(' · ');
-      const note = noteInput.value.trim();
-      byId('check-in-summary').textContent = summary || (note ? '未选心情或陪伴' : '还没填写');
-      byId('check-in-summary').classList.toggle('empty', !summary);
-      byId('check-in-note').textContent = note;
-      byId('check-in-note').hidden = !note;
-    }
-
-    byId('edit-check-in').addEventListener('click', async () => {
-      await loadCheckIn();
-      readCheckIn();
-      checkInError.hidden = true;
-      checkInDialog.showModal();
+    editValue.addEventListener('click', () => {
+      if (editValue.disabled) return;
+      valueInput.value = String(currentValue);
+      valueEditError.hidden = true;
+      valueDialog.showModal();
+      valueInput.select();
     });
-    byId('cancel-check-in').addEventListener('click', () => checkInDialog.close());
-    byId('check-in-form').addEventListener('submit', async event => {
+    cancelValue.addEventListener('click', () => { if (!valueBusy) valueDialog.close(); });
+    valueDialog.addEventListener('cancel', event => { if (valueBusy) event.preventDefault(); });
+    byId('value-form').addEventListener('submit', event => {
       event.preventDefault();
-      const checkIn = { mood: moodInput.value, company: companyInput.value, note: noteInput.value.trim() };
-      try {
-        const res = await fetch('/api/mood', {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-          body: JSON.stringify(checkIn),
-        });
-        if (!res.ok) throw new Error('status ' + res.status);
-        savedCheckIn = checkIn;
-      } catch {
-        checkInError.textContent = '写不进状态文件，面板服务可能在重启。';
-        checkInError.hidden = false;
+      const raw = valueInput.value.trim();
+      const value = Number(raw);
+      if (!raw || !Number.isInteger(value) || value < 0 || value > 100) {
+        valueEditError.textContent = '请输入 0 到 100 之间的整数。';
+        valueEditError.hidden = false;
         return;
       }
-      renderCheckIn();
-      checkInDialog.close();
+      void updateValue({ value });
     });
-    loadCheckIn().then(() => {
-      readCheckIn();
-      renderCheckIn();
+    resetValue.addEventListener('click', () => { if (!resetValue.disabled) void updateValue({ action: 'reset' }); });
+
+    async function updateValue(change) {
+      if (preview || !valueOnline || valueBusy) return;
+      const reset = change.action === 'reset';
+      valueBusy = true;
+      valueVersion++;
+      valueStatus.hidden = true;
+      valueEditError.hidden = true;
+      valueControls();
+      try {
+        const response = await fetch('/api/value', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(change),
+          signal:AbortSignal.timeout(5000),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.state) throw new Error(result.error || '未能保存数值。');
+        render(result.state);
+        if (valueDialog.open) valueDialog.close();
+        valueStatus.classList.remove('error');
+        valueStatus.textContent = reset ? '已回到初始值 ' + result.state.current + '。' : '已调整到 ' + result.state.current + '。';
+        valueStatus.hidden = false;
+      } catch (error) {
+        const label = reset ? valueStatus : valueEditError;
+        if (reset) label.classList.add('error');
+        label.textContent = error.name === 'TimeoutError' ? '未能确认结果，请刷新数值后再试。' : (error.message || '暂时无法保存。');
+        label.hidden = false;
+      } finally {
+        valueVersion++;
+        valueBusy = false;
+        valueControls();
+      }
+    }
+
+    const pendingSelect = byId('pending-session');
+    const pendingInput = byId('pending-input');
+    const pendingSave = byId('pending-save');
+    const pendingClear = byId('pending-clear');
+    const pendingStatus = byId('pending-status');
+    const pendingSlip = byId('pending-slip');
+    let pendingId = '';
+    let pendingListKey = '';
+    let pendingCount = 0;
+    let pendingBusy = false;
+    let pendingVersion = 0;
+
+    function pendingUrl(path, id) {
+      return id ? path + '?sessionId=' + encodeURIComponent(id) : path;
+    }
+
+    function pendingControls() {
+      pendingSelect.disabled = pendingCount < 2 || pendingBusy;
+      pendingInput.disabled = !pendingId || pendingBusy;
+      pendingSave.disabled = !pendingId || pendingBusy;
+      pendingClear.disabled = !pendingId || pendingBusy;
+    }
+
+    function showPending(note, error = '') {
+      pendingStatus.classList.toggle('error', Boolean(error));
+      if (error) { pendingStatus.textContent = error; return; }
+      pendingClear.hidden = !note;
+      pendingSlip.hidden = !note;
+      if (!note) {
+        byId('pending-text').textContent = '';
+        byId('pending-expiry').textContent = '';
+        pendingStatus.textContent = pendingId ? '暂无便签 · 留存 4 小时，只给所选会话。' : '没有启用便签的会话。';
+        return;
+      }
+      const ends = new Date(Date.parse(note.at) + Number(note.hours) * 3600000);
+      const hasExpiry = Number.isFinite(ends.getTime());
+      const expiry = byId('pending-expiry');
+      expiry.hidden = !hasExpiry;
+      if (hasExpiry) expiry.setAttribute('datetime', ends.toISOString());
+      expiry.textContent = hasExpiry ? clock.format(ends) + ' 到期' : '';
+      byId('pending-text').textContent = note.text || '还有话没说完';
+      pendingStatus.textContent = '只给所选会话，不会主动发送消息。';
+    }
+
+    function syncPending(state, requestedId) {
+      const sessions = Array.isArray(state.pendingSessions) ? state.pendingSessions : [];
+      const key = JSON.stringify(sessions);
+      if (key !== pendingListKey) {
+        pendingListKey = key;
+        pendingCount = sessions.length;
+        pendingId = sessions.some(session => session.id === pendingId) ? pendingId : (sessions[0]?.id || '');
+        const options = sessions.map(session => new Option(session.label, session.id));
+        pendingSelect.replaceChildren(...(options.length ? options : [new Option('未启用', '')]));
+        pendingSelect.value = pendingId;
+        pendingControls();
+      }
+      if (pendingId !== requestedId) { void refresh(); return; }
+      showPending(state.pending);
+    }
+
+    pendingSelect.addEventListener('change', () => {
+      pendingId = pendingSelect.value;
+      pendingInput.value = '';
+      pendingVersion++;
+      pendingStatus.textContent = '正在读取所选会话的便签…';
+      pendingClear.hidden = true;
+      pendingSlip.hidden = true;
+      pendingControls();
+      void refresh();
     });
+
+    async function writePending(method) {
+      const text = pendingInput.value.trim();
+      if (!pendingId || pendingBusy || (method === 'POST' && !text)) return;
+      const id = pendingId;
+      pendingBusy = true;
+      pendingVersion++;
+      pendingControls();
+      try {
+        const response = await fetch(pendingUrl('/api/pending', id), method === 'POST' ? {
+          method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, hours: 4 }),
+        } : { method });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || '操作失败。');
+        if (method === 'POST') pendingInput.value = '';
+        showPending(result.pending);
+      } catch (error) {
+        showPending(null, error.message || '暂时不能修改便签，请稍后再试。');
+      } finally {
+        pendingVersion++;
+        pendingBusy = false;
+        pendingControls();
+      }
+    }
+
+    byId('pending-form').addEventListener('submit', event => { event.preventDefault(); void writePending('POST'); });
+    pendingClear.addEventListener('click', () => void writePending('DELETE'));
 
     const clock = new Intl.DateTimeFormat('zh-CN', {
       timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -287,26 +408,29 @@
     });
 
     function renderTrend(history) {
-      const path = [];
-      let drawing = false;
+      const path = [], area = [];
+      let run = [];
       let latest;
       let count = 0;
+      function closeRun() {
+        if (run.length > 1) area.push(`M${run[0][0]} 108 L${run.map(point => point.join(' ')).join(' L')} L${run.at(-1)[0]} 108Z`);
+        run = [];
+      }
       history.forEach((point, index) => {
-        if (point.value === null) {
-          drawing = false;
-          return;
-        }
-        const x = index * 720 / (history.length - 1);
-        const y = 108 - point.value * 1.04;
-        latest = `${x.toFixed(1)} ${y.toFixed(1)}`;
-        path.push(`${drawing ? 'L' : 'M'}${latest}`);
-        drawing = true;
+        if (!Number.isFinite(point.value)) { closeRun(); return; }
+        const x = (history.length > 1 ? index * 720 / (history.length - 1) : 720).toFixed(1);
+        const y = (108 - Math.max(0, Math.min(100, point.value)) * 1.04).toFixed(1);
+        latest = `${x} ${y}`;
+        path.push(`${run.length ? 'L' : 'M'}${latest}`);
+        run.push([x, y]);
         count++;
       });
+      closeRun();
       byId('trend').setAttribute('d', path.join(' '));
+      byId('trend-area').setAttribute('d', area.join(' '));
       byId('latest-point').setAttribute('d', latest ? `M${latest}h0` : '');
       byId('trend-label').textContent = `最近 72 小时的数值走势，可推算 ${count} 个采样点`;
-      byId('plot-note').textContent = count > 1 ? '缺少历史记录的时段留空。' : '历史记录不足，目前仅显示当前点。';
+      byId('plot-note').textContent = count > 1 ? '按小时估算；缺少历史记录的时段留空。' : '历史记录不足，目前仅显示当前点。';
     }
 
     function renderEvents(events) {
@@ -318,7 +442,7 @@
         time.className = 'small event-time';
         time.dateTime = event.at;
         time.textContent = calendar.format(new Date(event.at));
-        delta.className = event.delta < 0 ? 'delta negative' : 'delta';
+        delta.className = event.delta < 0 ? 'delta negative' : event.delta === 0 ? 'delta zero' : 'delta';
         delta.textContent = event.delta > 0 ? `+${event.delta}` : String(event.delta);
         note.className = 'event-note';
         note.textContent = event.note || '—';
@@ -336,39 +460,78 @@
 
     function render(state) {
       if (state.owner) {
-        const heading = state.owner + ' · 状态面板';
+        const heading = state.owner + ' · 潮汐面板';
         if (document.title !== heading) document.title = heading;
-        const headingEl = byId('panel-title');
-        if (headingEl && headingEl.textContent !== heading) headingEl.textContent = heading;
+        byId('owner-name').textContent = state.owner;
       }
       byId('current').textContent = state.current;
+      currentValue = state.current;
+      baselineValue = state.baseline;
+      valueOnline = !preview && Number.isFinite(currentValue);
+      const baseBadge = byId('value-baseline');
+      baseBadge.hidden = !Number.isInteger(baselineValue);
+      baseBadge.textContent = baseBadge.hidden ? '' : '↦ ' + baselineValue;
+      resetValue.title = baseBadge.hidden ? '回初始值' : '回初始值 ' + baselineValue;
+      valueControls();
+      const level = Number(state.current);
+      byId('gauge').setAttribute('style', '--level:' + (Number.isFinite(level) ? Math.max(0, Math.min(100, level)) : 0) + '%');
       byId('tier').textContent = state.tier;
       byId('tier').hidden = false;
-      byId('activity').textContent = state.activeNote;
-      byId('activity').hidden = !state.activeNote;
-      byId('season').textContent = state.season.active
-        ? `发情期 · 第 ${state.season.day} 天`
-        : `还有 ${state.season.daysUntil} 天`;
+      const activity = state.waking ? '刚醒 · 慢慢清醒' : state.activeNote;
+      byId('activity').textContent = activity;
+      byId('activity').hidden = !activity;
+      const day = state.season.active ? Math.max(1, Math.min(3, Math.floor(state.season.day || 1))) : 0;
+      byId('season').textContent = day ? '第 ' + day + ' 天' : '还有 ' + Math.max(0, Math.ceil(state.season.daysUntil || 0)) + ' 天';
+      byId('cycle-tag').textContent = day ? '进行中' : '待开始';
+      byId('season-dates').textContent = (day ? '发情期' : '下次发情期') + ' · 每月 18–20 日';
+      for (let i = 1; i <= 3; i++) {
+        const phase = byId('cycle-' + i);
+        phase.setAttribute('data-phase', !day || i > day ? 'upcoming' : i === day ? 'current' : 'passed');
+        if (i === day) phase.setAttribute('aria-current', 'step');
+        else phase.removeAttribute('aria-current');
+      }
       renderTrend(state.history);
       renderEvents(state.events);
       byId('status').classList.remove('error');
       byId('status').textContent = `更新于 ${clock.format(new Date(state.asOf))}`;
+      byId('connection').setAttribute('data-online', 'true');
+      byId('connection').textContent = '本地服务在线';
     }
 
     async function refresh() {
+      const requestedId = pendingId;
+      const version = pendingVersion;
+      const readValueVersion = valueVersion;
       try {
-        const response = await fetch('/api/state', { cache: 'no-store' });
+        const response = await fetch(pendingUrl('/api/state', requestedId), { cache: 'no-store' });
         const state = await response.json();
         if (!response.ok) throw new Error(state.error);
-        render(state);
+        if (!valueBusy && readValueVersion === valueVersion) render(state);
+        if (!pendingBusy && version === pendingVersion) syncPending(state, requestedId);
       } catch {
+        if (readValueVersion !== valueVersion || valueBusy) return;
+        valueOnline = false;
+        valueControls();
         byId('status').classList.add('error');
         byId('status').textContent = '暂时读不到状态，稍后自动重试。';
+        byId('connection').setAttribute('data-online', 'false');
+        byId('connection').textContent = '连接中断';
       }
     }
 
-    if (location.protocol === 'file:') {
-      byId('status').textContent = '请双击 start.bat 启动面板。';
+    if (preview) {
+      const example = Date.now();
+      render({ owner:'你的名字', current:24, baseline:12, tier:'有点想', season:{active:true,day:2}, activeNote:'',
+        history:Array.from({length:73}, (_, i) => ({ value:i < 20 ? null : i === 55 ? 76 : i > 55 ? 10 + (i - 56) * .875 : Math.round(13 + (i - 20) * 1.1 + 4 * Math.sin(i / 4)) })),
+        events:[{at:new Date(example-3600_000).toISOString(),delta:8,note:'一起聊了会儿'}, {at:new Date(example-7200_000).toISOString(),delta:-6,note:'先去休息了'}, {at:new Date(example-10800_000).toISOString(),delta:0,note:'今天的记录'}], asOf:new Date(example).toISOString() });
+      pendingId = 'preview';
+      pendingSelect.replaceChildren(new Option('示例会话','preview'));
+      pendingSelect.value = 'preview';
+      showPending({text:'下次接着聊没讲完的故事。',at:new Date(example).toISOString(),hours:4});
+      pendingStatus.textContent = '示例便签 · 预览不会修改数据。';
+      byId('connection').setAttribute('data-online', 'false');
+      byId('connection').textContent = '离线预览';
+      byId('status').textContent = '示例数据 · 打开本地面板可查看实时状态';
     } else {
       refresh();
       setInterval(refresh, 30_000);
