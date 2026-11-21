@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 
 const HOST = '127.0.0.1';
 const PORT = 41888;
-const OWNER = process.env.LIBIDO_OWNER || '你的名字';
+const OWNER = process.env.LIBIDO_OWNER || '鱼';
 const DATA_FILE = process.env.LIBIDO_STATE
   || join(homedir(), '.dsh', 'worlds', 'default', 'me', '发情状态.json');
 const INITIAL_STATE = {
